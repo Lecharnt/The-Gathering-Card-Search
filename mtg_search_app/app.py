@@ -73,86 +73,115 @@ def get_color_identity_name(color_identity):
     else:
         return "Five-Color (WUBRG)"
 
+def get_card_front_and_back(card):
+    """Returns both faces of a transform card or just the single face"""
+    if card.get('layout') in ['transform', 'modal_dfc'] and 'card_faces' in card:
+        return card['card_faces'][0], card['card_faces'][1]
+    return card, None
+
 def categorize_by_color(cards):
     categories = defaultdict(list)
     for card in cards:
-        front = card['card_faces'][0] if card.get('layout') == 'transform' else card
-        color_identity = front.get('color_identity', [])
+        front, back = get_card_front_and_back(card)
+        front_color_identity = front.get('color_identity', [])
         card_type = front['type_line']
         
-        if 'Land' in card_type:
-            categories['Lands'].append(front)
+        # Check if back face exists and has different color identity
+        if back and back.get('color_identity', []) != front_color_identity:
+            # For transform cards, use the combined color identity
+            combined_colors = list(set(front_color_identity + back.get('color_identity', [])))
+            color_name = get_color_identity_name(combined_colors)
         else:
-            color_name = get_color_identity_name(color_identity)
-            categories[color_name].append(front)
+            color_name = get_color_identity_name(front_color_identity)
+            
+        if 'Land' in card_type:
+            categories['Lands'].append(card)
+        else:
+            categories[color_name].append(card)
     return categories
 
 def categorize_by_type(cards):
     categories = defaultdict(list)
     for card in cards:
-        front = card['card_faces'][0] if card.get('layout') == 'transform' else card
-        card_type = front['type_line']
+        front, back = get_card_front_and_back(card)
+        front_type = front['type_line']
         
-        if 'Creature' in card_type:
-            categories['Creatures'].append(front)
-        elif 'Artifact' in card_type:
-            categories['Artifacts'].append(front)
-        elif 'Enchantment' in card_type:
-            categories['Enchantments'].append(front)
-        elif 'Instant' in card_type:
-            categories['Instants'].append(front)
-        elif 'Sorcery' in card_type:
-            categories['Sorceries'].append(front)
-        elif 'Planeswalker' in card_type:
-            categories['Planeswalkers'].append(front)
-        elif 'Land' in card_type:
-            categories['Lands'].append(front)
-        elif 'Battle' in card_type:
-            categories['Battles'].append(front)
+        # Check both faces for transform cards
+        types = [front_type]
+        if back:
+            types.append(back['type_line'])
+        
+        # Categorize based on all types from all faces
+        if any('Creature' in t for t in types):
+            categories['Creatures'].append(card)
+        elif any('Artifact' in t for t in types):
+            categories['Artifacts'].append(card)
+        elif any('Enchantment' in t for t in types):
+            categories['Enchantments'].append(card)
+        elif any('Instant' in t for t in types):
+            categories['Instants'].append(card)
+        elif any('Sorcery' in t for t in types):
+            categories['Sorceries'].append(card)
+        elif any('Planeswalker' in t for t in types):
+            categories['Planeswalkers'].append(card)
+        elif any('Land' in t for t in types):
+            categories['Lands'].append(card)
+        elif any('Battle' in t for t in types):
+            categories['Battles'].append(card)
         else:
-            categories['Other'].append(front)
+            categories['Other'].append(card)
     return categories
 
 def categorize_by_mana(cards):
     categories = defaultdict(list)
     for card in cards:
-        front = card['card_faces'][0] if card.get('layout') == 'transform' else card
-        cmc = front.get('cmc', 0)
+        front, back = get_card_front_and_back(card)
+        front_cmc = front.get('cmc', 0)
+        
+        # For transform cards, use the highest CMC of either face
+        if back:
+            back_cmc = back.get('cmc', 0)
+            cmc = max(front_cmc, back_cmc)
+        else:
+            cmc = front_cmc
         
         if cmc == 0:
-            categories['0 Mana'].append(front)
+            categories['0 Mana'].append(card)
         elif cmc == 1:
-            categories['1 Mana'].append(front)
+            categories['1 Mana'].append(card)
         elif cmc == 2:
-            categories['2 Mana'].append(front)
+            categories['2 Mana'].append(card)
         elif cmc == 3:
-            categories['3 Mana'].append(front)
+            categories['3 Mana'].append(card)
         elif cmc == 4:
-            categories['4 Mana'].append(front)
+            categories['4 Mana'].append(card)
         elif cmc == 5:
-            categories['5 Mana'].append(front)
+            categories['5 Mana'].append(card)
         elif cmc == 6:
-            categories['6 Mana'].append(front)
+            categories['6 Mana'].append(card)
         else:
-            categories['7+ Mana'].append(front)
+            categories['7+ Mana'].append(card)
     return categories
 
 def categorize_by_price(cards):
     categories = defaultdict(list)
     for card in cards:
-        front = card['card_faces'][0] if card.get('layout') == 'transform' else card
-        price = float(front.get('prices', {}).get('usd', 0) or 0)
+        prices = card.get('prices', {})
+        usd_price = prices.get('usd')
+        
+        # For transform cards, we'll use the card's overall price (not per face)
+        price = float(usd_price or 0)
         
         if price == 0:
-            categories['$0 (No Price)'].append(front)
+            categories['$0 (No Price)'].append(card)
         elif price <= 0.50:
-            categories['$0.50 or less'].append(front)
+            categories['$0.50 or less'].append(card)
         elif price <= 1.00:
-            categories['$0.51 to $1.00'].append(front)
+            categories['$0.51 to $1.00'].append(card)
         elif price <= 5.00:
-            categories['$1.01 to $5.00'].append(front)
+            categories['$1.01 to $5.00'].append(card)
         else:
-            categories['$5.01 or more'].append(front)
+            categories['$5.01 or more'].append(card)
     return categories
 def safe_get(card, *keys, default=None):
     """Safely get nested dictionary values."""
