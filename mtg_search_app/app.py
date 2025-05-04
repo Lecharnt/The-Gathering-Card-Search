@@ -1,10 +1,18 @@
-from flask import Flask, render_template, request
+import streamlit as st
 import requests
 from collections import defaultdict
+import time
 
-app = Flask(__name__)
+# Streamlit app configuration
+st.set_page_config(
+    page_title="MTG Card Search",
+    page_icon=":cards:",
+    layout="wide"
+)
+
 SCRYFALL_SEARCH_URL = "https://api.scryfall.com/cards/search"
 
+# Same helper functions as before
 def fetch_cards(query):
     url = f"{SCRYFALL_SEARCH_URL}?q=o:{query}&unique=cards"
     all_cards = []
@@ -85,7 +93,6 @@ def categorize_by_type(cards):
         front = card['card_faces'][0] if card.get('layout') == 'transform' else card
         card_type = front['type_line']
         
-        # Simplify type categories
         if 'Creature' in card_type:
             categories['Creatures'].append(front)
         elif 'Artifact' in card_type:
@@ -148,56 +155,78 @@ def categorize_by_price(cards):
             categories['$5.01 or more'].append(front)
     return categories
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    categories = {}
-    query = ""
-    sort_by = "type"
-    sort_label = "Type"
-    has_categories = False
-    loaded = False  # Add this flag
-
-    if request.method == "POST":
-        query = request.form.get("query", "").strip()
-        sort_by = request.form.get("sort_by", "type")
+# Streamlit UI
+def main():
+    st.title("Magic The Gathering Card Search")
+    
+    # Sidebar for filters
+    with st.sidebar:
+        st.header("Search Options")
+        query = st.text_input("Search Oracle text", "")
+        sort_by = st.selectbox(
+            "Sort by",
+            ["Type", "Color", "Mana Cost", "Price"],
+            index=0
+        )
+    
+    # Main content area
+    if query:
+        with st.spinner("Searching for cards..."):
+            cards = fetch_cards(query)
+            time.sleep(0.5)  # Just to show the spinner
         
-        # Show loading state when fetching cards
-        cards = fetch_cards(query)
-
-        sort_labels = {
-            "type": "Type",
-            "color": "Color",
-            "mana": "Mana Cost",
-            "price": "Price"
+        if not cards:
+            st.warning("No cards found matching your search.")
+            return
+            
+        # Sort and categorize based on selection
+        sort_methods = {
+            "Type": categorize_by_type,
+            "Color": categorize_by_color,
+            "Mana Cost": categorize_by_mana,
+            "Price": categorize_by_price
         }
-        sort_label = sort_labels.get(sort_by, "Type")
-
-        # Sorting and categorization logic remains the same
-        if sort_by == "type":
-            cards.sort(key=lambda x: x['type_line'])
-            categories = categorize_by_type(cards)
-        elif sort_by == "color":
-            cards.sort(key=lambda x: get_color_identity_name(x.get('color_identity', [])))
-            categories = categorize_by_color(cards)
-        elif sort_by == "mana":
-            cards.sort(key=lambda x: x.get('cmc', 0))
-            categories = categorize_by_mana(cards)
-        elif sort_by == "price":
-            cards.sort(key=lambda x: float(x.get('prices', {}).get('usd', 0) or 0))
-            categories = categorize_by_price(cards)
         
-        has_categories = bool(categories)
-        loaded = True  # Set to True after data is loaded
+        categories = sort_methods[sort_by](cards)
+        
+        # Display results
+        st.success(f"Found {len(cards)} cards")
+        st.subheader(f"Results sorted by: {sort_by}")
+        
+        # Create expandable sections for each category
+        for category, cards_in_category in categories.items():
+            with st.expander(f"{category} ({len(cards_in_category)})", expanded=True):
+                # Display cards in columns
+                cols = st.columns(4)  # 4 columns
+                
+                for i, card in enumerate(cards_in_category):
+                    with cols[i % 4]:
+                        # Get the image URL
+                        if 'image_uris' in card:
+                            image_url = card['image_uris']['normal']
+                        elif 'card_faces' in card and 'image_uris' in card['card_faces'][0]:
+                            image_url = card['card_faces'][0]['image_uris']['normal']
+                        else:
+                            image_url = None
+                        
+                        if image_url:
+                            st.image(
+                                image_url,
+                                caption=f"{card['name']} ({card.get('mana_cost', '')})",
+                                use_column_width=True
+                            )
+                        else:
+                            st.write(f"No image for {card['name']}")
+                        
+                        # Card details tooltip
+                        with st.popover("ℹ️ Details"):
+                            st.write(f"**Name:** {card['name']}")
+                            st.write(f"**Type:** {card['type_line']}")
+                            st.write(f"**Mana Cost:** {card.get('mana_cost', 'N/A')}")
+                            st.write(f"**CMC:** {card.get('cmc', 'N/A')}")
+                            if 'oracle_text' in card:
+                                st.write(f"**Text:** {card['oracle_text']}")
+                            st.write(f"[Scryfall Link]({card['scryfall_uri']})")
 
-    return render_template(
-        "index.html", 
-        categories=categories,
-        has_categories=has_categories,
-        query=query, 
-        sort_by=sort_by,
-        sort_label=sort_label,
-        loaded=loaded  # Pass the loaded flag to template
-    )
-# Add this at the bottom of your app.py
 if __name__ == "__main__":
-    app.run()
+    main()
