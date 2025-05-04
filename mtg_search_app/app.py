@@ -12,7 +12,6 @@ st.set_page_config(
 
 SCRYFALL_SEARCH_URL = "https://api.scryfall.com/cards/search"
 
-# Same helper functions as before
 def fetch_cards(query):
     url = f"{SCRYFALL_SEARCH_URL}?q=o:{query}&unique=cards"
     all_cards = []
@@ -22,6 +21,7 @@ def fetch_cards(query):
         all_cards.extend(data.get("data", []))
         url = data.get("next_page")
     return all_cards
+
 
 def get_color_identity_name(color_identity):
     color_map = {
@@ -154,12 +154,18 @@ def categorize_by_price(cards):
         else:
             categories['$5.01 or more'].append(front)
     return categories
+def safe_get(card, *keys, default=None):
+    """Safely get nested dictionary values."""
+    for key in keys:
+        try:
+            card = card[key]
+        except (KeyError, TypeError):
+            return default
+    return card
 
-# Streamlit UI
 def main():
     st.title("Magic The Gathering Card Search")
     
-    # Sidebar for filters
     with st.sidebar:
         st.header("Search Options")
         query = st.text_input("Search Oracle text", "")
@@ -169,17 +175,15 @@ def main():
             index=0
         )
     
-    # Main content area
     if query:
         with st.spinner("Searching for cards..."):
             cards = fetch_cards(query)
-            time.sleep(0.5)  # Just to show the spinner
+            time.sleep(0.5)
         
         if not cards:
             st.warning("No cards found matching your search.")
             return
             
-        # Sort and categorize based on selection
         sort_methods = {
             "Type": categorize_by_type,
             "Color": categorize_by_color,
@@ -189,44 +193,41 @@ def main():
         
         categories = sort_methods[sort_by](cards)
         
-        # Display results
         st.success(f"Found {len(cards)} cards")
         st.subheader(f"Results sorted by: {sort_by}")
         
-        # Create expandable sections for each category
         for category, cards_in_category in categories.items():
             with st.expander(f"{category} ({len(cards_in_category)})", expanded=True):
-                # Display cards in columns
-                cols = st.columns(4)  # 4 columns
+                cols = st.columns(4)
                 
                 for i, card in enumerate(cards_in_category):
                     with cols[i % 4]:
-                        # Get the image URL
-                        if 'image_uris' in card:
-                            image_url = card['image_uris']['normal']
-                        elif 'card_faces' in card and 'image_uris' in card['card_faces'][0]:
-                            image_url = card['card_faces'][0]['image_uris']['normal']
-                        else:
-                            image_url = None
+                        # Safely get image URL
+                        image_url = safe_get(card, 'image_uris', 'normal') or \
+                                  safe_get(card, 'card_faces', 0, 'image_uris', 'normal')
                         
                         if image_url:
                             st.image(
                                 image_url,
-                                caption=f"{card['name']} ({card.get('mana_cost', '')})",
+                                caption=f"{safe_get(card, 'name', default='Unknown')} ({safe_get(card, 'mana_cost', default='')})",
                                 use_column_width=True
                             )
                         else:
-                            st.write(f"No image for {card['name']}")
+                            st.write(f"No image for {safe_get(card, 'name', default='Unknown Card')}")
                         
-                        # Card details tooltip
                         with st.popover("ℹ️ Details"):
-                            st.write(f"**Name:** {card['name']}")
-                            st.write(f"**Type:** {card['type_line']}")
-                            st.write(f"**Mana Cost:** {card.get('mana_cost', 'N/A')}")
-                            st.write(f"**CMC:** {card.get('cmc', 'N/A')}")
-                            if 'oracle_text' in card:
-                                st.write(f"**Text:** {card['oracle_text']}")
-                            st.write(f"[Scryfall Link]({card['scryfall_uri']})")
+                            st.write(f"**Name:** {safe_get(card, 'name', default='Unknown')}")
+                            st.write(f"**Type:** {safe_get(card, 'type_line', default='N/A')}")
+                            st.write(f"**Mana Cost:** {safe_get(card, 'mana_cost', default='N/A')}")
+                            st.write(f"**CMC:** {safe_get(card, 'cmc', default='N/A')}")
+                            st.write(f"**Text:** {safe_get(card, 'oracle_text', default='N/A')}")
+                            
+                            # Safely get scryfall URI
+                            scryfall_uri = safe_get(card, 'scryfall_uri')
+                            if scryfall_uri:
+                                st.write(f"[Scryfall Link]({scryfall_uri})")
+                            else:
+                                st.write("No Scryfall link available")
 
 if __name__ == "__main__":
     main()
