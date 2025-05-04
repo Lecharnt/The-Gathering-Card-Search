@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="mb-4">Magic The Gathering Card Search</h1>
+<form method="post" class="mb-4" id="searchForm">
+    <div class="row">
+        <div class="col-md-6 mb-2">
+            <input type="text" name="query" class="form-control" placeholder="Enter Oracle text keyword..." value="{{ query }}">
+        </div>
+        <div class="col-md-4 mb-2">
+            <select name="sort_by" class="form-select" id="sortTypeDropdown">
+                <option value="type" {% if sort_by == 'type' %}selected{% endif %}>Sort by Type</option>
+                <option value="color" {% if sort_by == 'color' %}selected{% endif %}>Sort by Color</option>
+                <option value="mana" {% if sort_by == 'mana' %}selected{% endif %}>Sort by Mana Cost</option>
+                <option value="price" {% if sort_by == 'price' %}selected{% endif %}>Sort by Price</option>
+            </select>
+        </div>
+        <div class="col-md-2 mb-2">
+            <button type="submit" class="btn btn-primary w-100">Search</button>
+        </div>
+    </div>
+    
+    <!-- Dynamic filter dropdown -->
+    <div class="row mt-3 {% if not has_categories %}d-none{% endif %}" id="dynamicFilterRow">
+        <div class="col-md-12">
+            <select class="form-select" id="dynamicFilterDropdown">
+                <option value="all">Show All</option>
+                {% for category in categories %}
+                    <option value="{{ category }}">{{ category }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</form>
+
+{% if has_categories %}
+    <div class="alert alert-info mb-3">
+        Currently sorted by: <strong>{{ sort_label }}</strong>
+    </div>
+{% endif %}
+
+{% macro display_cards(card_list) %}
+    <div class="card-grid">
+        {% for card in card_list %}
+            {% set rarity = card.rarity | lower %}
+            <div class="card-item {{ rarity }}" data-rarity="{{ rarity }}">
+                <a href="{{ card.scryfall_uri }}" target="_blank" class="text-decoration-none">
+                    <img src="{{ card.image_uris.small if 'image_uris' in card else card.card_faces[0].image_uris.small }}" 
+                         class="card-image" 
+                         alt="{{ card.name }}"
+                         title="{{ card.name }} ({{ card.mana_cost }}) - {{ card.type_line }} - {{ card.rarity }}">
+                    <div class="card-name">{{ card.name }}</div>
+                </a>
+            </div>
+        {% endfor %}
+    </div>
+{% endmacro %}
+
+<div class="accordion" id="cardAccordion">
+    {% for category, cards in categories.items() %}
+    <div class="accordion-item category-section" data-category="{{ category }}">
+        <h2 class="accordion-header" id="heading{{ loop.index }}">
+            <button class="accordion-button collapsed" type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#collapse{{ loop.index }}" 
+                    aria-expanded="false" 
+                    aria-controls="collapse{{ loop.index }}">
+                {{ category }} ({{ cards|length }})
+            </button>
+        </h2>
+        <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" 
+             aria-labelledby="heading{{ loop.index }}" 
+             data-bs-parent="#cardAccordion">
+            <div class="accordion-body">
+                {{ display_cards(cards) }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dynamicFilterDropdown = document.getElementById('dynamicFilterDropdown');
+    
+    dynamicFilterDropdown.addEventListener('change', function() {
+        const selectedValue = this.value;
+        document.querySelectorAll('.accordion-item').forEach(item => {
+            if (selectedValue === 'all' || item.dataset.category === selectedValue) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+                // Collapse any open sections that are being hidden
+                const collapse = item.querySelector('.accordion-collapse');
+                if (collapse.classList.contains('show')) {
+                    new bootstrap.Collapse(collapse, { toggle: false });
+                }
+            }
+        });
+    });
+});
+</script>
+<script>
+    // Smooth hover effects with lerping
+    document.addEventListener('DOMContentLoaded', function() {
+        const cards = document.querySelectorAll('.card-item');
+        
+        cards.forEach(card => {
+            let targetScale = 1;
+            let currentScale = 1;
+            let animationId;
+            
+            card.addEventListener('mouseenter', () => {
+                targetScale = 1.05;
+                animateScale();
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                targetScale = 1;
+                animateScale();
+            });
+            
+            function animateScale() {
+                cancelAnimationFrame(animationId);
+                
+                function update() {
+                    currentScale = lerp(currentScale, targetScale, 0.1);
+                    card.style.transform = `translateY(${(targetScale - 1) * -5}px) scale(${currentScale})`;
+                    
+                    if (Math.abs(currentScale - targetScale) > 0.01) {
+                        animationId = requestAnimationFrame(update);
+                    }
+                }
+                
+                update();
+            }
+        });
+        
+        // Simple lerp function
+        function lerp(start, end, amt) {
+            return (1 - amt) * start + amt * end;
+        }
+    });
+    </script>
+{% endblock %}
