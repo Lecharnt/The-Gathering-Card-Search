@@ -200,4 +200,4 @@ def index():
     )
 # Add this at the bottom of your app.py
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
