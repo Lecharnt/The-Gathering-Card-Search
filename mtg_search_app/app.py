@@ -116,7 +116,7 @@ def categorize_by_type(cards):
 def categorize_by_mana(cards):
     categories = defaultdict(list)
     for card in cards:
-        front = card['card_faces'][0] if card.get('layout') == 'transform' else card
+        front = card['card_faces'][1] if card.get('layout') == 'transform' else card
         cmc = front.get('cmc', 0)
         
         if cmc == 0:
