@@ -215,7 +215,7 @@ def main():
                         else:
                             st.write(f"No image for {safe_get(card, 'name', default='Unknown Card')}")
                         
-                        with st.popover("ℹ️ Details"):
+                        with st.popover("Details"):
                             st.write(f"**Name:** {safe_get(card, 'name', default='Unknown')}")
                             st.write(f"**Type:** {safe_get(card, 'type_line', default='N/A')}")
                             st.write(f"**Mana Cost:** {safe_get(card, 'mana_cost', default='N/A')}")
