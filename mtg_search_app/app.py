@@ -200,4 +200,4 @@ def index():
     )
 # Add this at the bottom of your app.py
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)  # Remove debug=True for production
+    app.run(debug=True)
